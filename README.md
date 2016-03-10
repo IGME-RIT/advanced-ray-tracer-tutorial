@@ -1,4 +1,4 @@
-# Normal Mapping Tutorial
+# Advanced Ray Tracer Tutorial
 
 This program serves to demonstrate the concept of ray tracing.
 
