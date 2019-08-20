@@ -89,12 +89,18 @@ we calculate lighting data:
 Then we multiply diffuse by the color of the reflected geometry, and 
 we return that pixel color, which then gets "mixed" in "trace(...)", 
 and then the result of trace() gets sent to the screen
- 
+
+Optimization:
+In the function bool intersectTriangles, we skip the collision test with triangles
+that do not face the ray that is being used. We do this by using the dot product
+with the ray's direction, and the triangle's normal. 
+
 How to improve:
 Many ways to improve:
 
 More Reflections
 	Try to have reflections, of reflections, of reflections...
+	This might involve recurrsion, and might not
 
 Uniform buffers
 	Keep the triangles array, make it empty
@@ -104,14 +110,13 @@ Uniform buffers
 	Have the compute shader write to the triangles array, just like
 	how the compute shader wrote the the vertex buffer in Basic Compute Particles
 	
-Optimization:
+More Optimization:
 	Give each model a spherical radius, so that rays check for collision
 	with the spheres, before checking for collision with each polygon that
-	is inside the sphere
+	is inside the sphere. After this, keep doing more spatial partitioning
 
 Textures
-	This was between lines 329 and 343 in Reflection FragmentShader.glsl
-	Between float lightIntensity = 6.0; and vec3 pixColor = ...
+	Between "float lightIntensity = 6.0;" and "vec3 pixColor = ..."
 
 	i.point is the 3D coordinate that a ray hits a triangle
 	triangles[i.index].a is one point on the triangle
@@ -126,9 +131,8 @@ Textures
 		Then do vec3 pixColor = sample(texture, uv) * 0.1
 	However
 		This will not change the color of squares in reflection
-		At line 285 and 296, triangles[eyeHitPoint.index].color
-		needs to be replaced with reflectHit.point (like i.point)
-		to calculate UVs all over again
+		triangles[eyeHitPoint.index].color needs to be replaced with 
+		reflectHit.point (like i.point) to calculate UVs all over again
 		
 Skybox
 	On lines 274, in Reflection FragmentShader.glsl

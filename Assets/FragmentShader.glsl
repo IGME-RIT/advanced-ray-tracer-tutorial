@@ -98,11 +98,11 @@ const triangle triangles[] = triangle[26](
 
 	/* Cube Box 2 */
 	/* Back face triangles */
-	triangle(vec3(2.5, 3.5, 2.5), vec3(3.5, 3.5, 2.5), vec3(2.5, 4.5, 2.5), vec3(0.0, 0.0, -1.0), vec3(1.0, 0.0, 0.0)),
-	triangle(vec3(3.5, 3.5, 2.5), vec3(3.5, 4.5, 2.5), vec3(2.5, 4.5, 2.5), vec3(0.0, 0.0, -1.0), vec3(1.0, 0.0, 0.0)),
+	triangle(vec3(2.5, 3.5, 2.5), vec3(3.5, 3.5, 2.5), vec3(2.5, 4.5, 2.5), vec3(0.0, 0.0, 1.0), vec3(1.0, 0.0, 0.0)),
+	triangle(vec3(3.5, 3.5, 2.5), vec3(3.5, 4.5, 2.5), vec3(2.5, 4.5, 2.5), vec3(0.0, 0.0, 1.0), vec3(1.0, 0.0, 0.0)),
 	/* Front face triangles*/
-	triangle(vec3(2.5, 3.5, 1.5), vec3(2.5, 4.5, 1.5), vec3(3.5, 4.5, 1.5), vec3(0.0, 0.0, 1.0), vec3(1.0, 0.0, 0.0)),
-	triangle(vec3(2.5, 3.5, 1.5), vec3(3.5, 4.5, 1.5), vec3(3.5, 3.5, 1.5), vec3(0.0, 0.0, 1.0), vec3(1.0, 0.0, 0.0)),
+	triangle(vec3(2.5, 3.5, 1.5), vec3(2.5, 4.5, 1.5), vec3(3.5, 4.5, 1.5), vec3(0.0, 0.0, -1.0), vec3(1.0, 0.0, 0.0)),
+	triangle(vec3(2.5, 3.5, 1.5), vec3(3.5, 4.5, 1.5), vec3(3.5, 3.5, 1.5), vec3(0.0, 0.0, -1.0), vec3(1.0, 0.0, 0.0)),
 	/* Right face triangles */
 	triangle(vec3(3.5, 3.5, 1.5), vec3(3.5, 4.5, 1.5), vec3(3.5, 4.5, 2.5), vec3(1.0, 0.0, 0.0), vec3(1.0, 0.0, 0.0)),
 	triangle(vec3(3.5, 3.5, 1.5), vec3(3.5, 4.5, 2.5), vec3(3.5, 3.5, 2.5), vec3(1.0, 0.0, 0.0), vec3(1.0, 0.0, 0.0)),
@@ -202,6 +202,24 @@ bool intersectTriangles(vec3 origin, vec3 dir, out hitinfo info)
 	// For each triangle.
 	for(int i = 0; i < NUM_TRIANGLES; i++)
 	{
+		// with no optimization, 42% GPU usage on GTX 1050 laptop
+		// Before checking if line collides with triangle, see if line
+		// is perpendicular to triangle's normal. If the normal doesn't
+		// face our line, then there's no way it can collide, so we skip collision test
+		// With this optimization, 38% GPU usage on GTX 1050 laptop 
+
+		/*
+			If the dot product is 0, the vectors are 90 degrees apart (orthogonal or perpendicular).
+			If the dot product is less than 0, the vectors are more than 90 degrees apart.
+			If the dot product is greater than 0, the vectors are less than 90 degrees apart.
+		*/
+
+		// If our direction can't hit the triangle
+		// skip this triangle, and check the next triangle
+		
+		if(dot(triangles[i].normal, dir) > 0)
+			continue;
+
 		// Compute distance t using above function to determine how far along the ray the triangle collides.
 		float t = rayIntersectsTriangle(origin, dir, triangles[i].a, triangles[i].b, triangles[i].c);
 
@@ -262,23 +280,16 @@ vec3 addLightColorToPixColor(vec3 lightPos, vec3 dir, hitinfo eyeHitPoint, float
 	float specular = max(0, pow(dot(r,-dir), 4)) / pow(dist, 2);
 	float diffuse = max(0, dot(triangles[eyeHitPoint.index].normal, normalPTL)) / pow(dist, 2);
 
-	// Add in our diffuse light and specular (we do white light, for specula) and factor in the reflectionLevel and lightIntensity.
-	vec3 pixColor = (triangles[eyeHitPoint.index].color * diffuse * lightIntensity) + (lightIntensity * specular * vec3(1.0, 1.0, 1.0));
-	
-	// Then return the final color.
-	return pixColor;
+	// Return our diffuse light and specular (we do white light, for specula) and factor in the reflectionLevel and lightIntensity.
+	return (triangles[eyeHitPoint.index].color * diffuse * lightIntensity) + (lightIntensity * specular * vec3(1.0, 1.0, 1.0));
 }
 
-// Takes the position of a light, a vector from the point of collision toward the light, a vector direction from the origin toward the point of collision,
-// a hitinfo object containing data in regards to the ray-triangle collision, and a float determining the brightness of a light.
-// This will also factor in a single reflection off of the initial collided surface.
+// First, we get a pixel of geometry that is reflected from other geometry, then we need to calculate the lighting
+// of the pixel of the geometry that is reflected from other geometry
 vec3 addReflectionToPixColor(vec3 lightPos, vec3 dir, hitinfo eyeHitPoint, float lightIntensity)
 {
 	// The reflection power variable determines the strength of the reflected light.
 	float reflectionPower = 0.35;
-
-	// Establish a pixColor variable at zero.
-	vec3 reflectColor = vec3(0.0, 0.0, 0.0);
 
 	// Gets a vector in the direction of the reflected ray.
 	vec3 reflectedEyeToPoint = reflect(dir, triangles[eyeHitPoint.index].normal);
@@ -299,12 +310,12 @@ vec3 addReflectionToPixColor(vec3 lightPos, vec3 dir, hitinfo eyeHitPoint, float
 		// We divide by distance squared, giving less light the further away a point is.
 		float diffuse = max(0, dot(triangles[reflectHit.index].normal, reflectPointToLight)) / pow(length(reflectPointToLight), 2);
 
-		// Then we add the reflected color to our pixColor.
-		reflectColor = triangles[reflectHit.index].color * diffuse * lightIntensity * reflectionPower;
+		// Return reflected color
+		return triangles[reflectHit.index].color * diffuse * lightIntensity * reflectionPower;
 	}
 	
-	// Then return the final color.
-	return reflectColor;
+	// Return 0, which can be replaced with skybox
+	return vec3(0);
 }
 
 // Trace a ray from an origin point in a given direction and calculate/return the color value of the point that ray hits.
@@ -351,7 +362,7 @@ vec4 trace(vec3 origin, vec3 dir)
 			// versus the reflection.
 			
 			// 0.5 = half and half
-			// 1.0 = perfect mirror
+			// 1.0 = perfect mirror, plus the ambient color
 			// 0.0 = no reflection
 			float reflectionLevel = 0.5;
 	
@@ -364,11 +375,15 @@ vec4 trace(vec3 origin, vec3 dir)
 	}
 
 	// If the ray doesn't hit any triangles, then this ray sees nothing and thus:
-	return vec4(0.0, 0.0, 0.0, 1.0);
+	// Return 0, which can be replaced with skybox
+	return vec4(vec3(0), 1.0);
 }
 
 void main(void)
 {
+	// Keep in mind, "textureCoord" does not actually mean textures being mapped onto the surface of geometry,
+	// UV coordinates and textures will come in a future tutorial
+
 	// This is easy. Using the textureCoord, you interpolate between the four corner rays to get a ray (dir) that goes through a point in the screen.
 	// For your mental image, imagine this shader runes once for every single pixel on your screen.
 	// Every time it runs, dir is the ray that goes from the camera's position, through the pixel that it is rendering. Thus, we are tracing a ray through every pixel 
@@ -376,4 +391,16 @@ void main(void)
 	vec2 pos = textureCoord;
 	vec3 dir = normalize(mix(mix(ray00, ray01, pos.y), mix(ray10, ray11, pos.y), pos.x));
 	color = trace(eye, dir);
+
+	// For each pixel:
+	// 1 ray goes from the eye to the geometry
+	// 4 rays go from geometry to lights
+	// 1 ray goes from geometry (hit by eye), to new geometry
+	// 4 rays go from new geometry to lights
+
+	// 10 rays per pixel, assuming that the rays
+	// that look for geometry actually find geometry,
+	// otherwise its 1 per pixel that goes into the 
+	// black void, or 5 rays per pixel, assuming
+	// the reflection ray goes into the black void.
 }
