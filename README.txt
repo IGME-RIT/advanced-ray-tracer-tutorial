@@ -23,18 +23,16 @@ Read the next few lines very carefully
 What this function will do: 
 reflect geometry off of other geometry
 What this function will NOT do:
-reflect geometry that is being reflect off of other geometry.
+reflect geometry that is being reflected off of other geometry.
+
+That means after a ray goes from eye to surface, it only
+bounces one time to look for geometry to reflect. It will
+not bounce more than once. (Looped reflections come next).
 
 For example, the cube in the center of the world will reflect
 the blue plane under it, and the blue plane will have a reflection
 of the red cube. However, the red cube in the reflection of the
 blue plane, will not have a reflection of the blue plane.
-
-If we want to go the extra mile, we can have:
-reflections of reflections of reflections of reflections of reflections...
-We can have it go infinitely, but for now let's just keep it simple
-
-This tutorial is reflections of geometry, on other geometry.
 
 In the "trace" function, we change the inside of our "for(j)" loop.
 
@@ -60,87 +58,29 @@ Then we return the pixel color, and that goes to the screen.
 [New function]
 vec3 addReflectionToPixColor(vec3 lightPos, vec3 pointToLight, vec3 dir, hitinfo eyeHitPoint, float lightIntensity)
 
-In the Bumpy Skybox tutorial of the "more graphics" section, you might remember we reflected
-vectors that were from the camera to the point of an object, and then the reflected value
-would project into the skybox, and return a color (which was from the skybox).
-We used a command "reflect(dir, normal)" to reflect the direction FROM camera TO skybox,
-over the normal vector of the object. Now with Ray Tracing, while we're actually shooting rays
-through the world, we can do this again.
+Just like previous tutorials where we used "reflect" in tutorials from the "More Graphics"
+section, and just how we used the "reflect" command in the last tutorial for specular
+lighting, we will use it again in this tutorial.
 
-To reflect a ray off of the triangle that the ray hit (in this case, the eye's ray hitting a triangle),
+After a ray hits a triangle (in this case, it was from our eye to the triangle),
+To reflect a ray off of the triangle that the ray hit,
 we use the "reflect" command that GLSL has for us
 	reflect(dir, triangles[eyeHitPoint.index].normal);
 	
 We create a hitInfo to see if this ray hits anything
 We check every triangle in the scene to see what it hits
-	if(intersectTriangles(eyeHitPoint.point, reflectedEyeToPoint, reflectHit))
+	if(intersectTriangles(eyeHitPoint.point, reflectedRayToPoint, reflectHit))
 	
 If it hits nothing, return vec3(0), which is the background color.
-If it hits a triangle, get the color of the triangle
-	triangles[reflectHit.index].color
-However, this doesn't give us any of the light information or shadow
-data of the geometry that is reflected off of geometry.
-
-So, for the geometry that is reflected off of geometry,
-we calculate lighting data:
-	vec3 reflectPointToLight = lightPos - reflectHit.point;
-	float diffuse = max(0, dot(triangles[reflectHit.index].normal, reflectPointToLight)) / pow(length(reflectPointToLight), 2);
+If it hits a triangle, then we need to render the point on that
+triangle, just like how we rendered points that the eye's rays hit 
+before reflections
+	return addLightColorToPixColor(lightPos, reflectedRayToPoint, reflectHit, lightIntensity);
 
 Then we multiply diffuse by the color of the reflected geometry, and 
 we return that pixel color, which then gets "mixed" in "trace(...)", 
 and then the result of trace() gets sent to the screen
 
-Optimization:
-In the function bool intersectTriangles, we skip the collision test with triangles
-that do not face the ray that is being used. We do this by using the dot product
-with the ray's direction, and the triangle's normal. 
-
 How to improve:
-Many ways to improve:
-
-More Reflections
-	Try to have reflections, of reflections, of reflections...
-	This might involve recurrsion, and might not
-
-Uniform buffers
-	Keep the triangles array, make it empty
-	Put the plane, and each cube in a seperate uniform buffer
-	Give them each a model matrix
-	Use a compute shader to move them, each with their own model matrix
-	Have the compute shader write to the triangles array, just like
-	how the compute shader wrote the the vertex buffer in Basic Compute Particles
-	
-More Optimization:
-	Give each model a spherical radius, so that rays check for collision
-	with the spheres, before checking for collision with each polygon that
-	is inside the sphere. After this, keep doing more spatial partitioning
-
-Textures
-	Between "float lightIntensity = 6.0;" and "vec3 pixColor = ..."
-
-	i.point is the 3D coordinate that a ray hits a triangle
-	triangles[i.index].a is one point on the triangle
-	triangles[i.index].b is one point on the triangle
-	triangles[i.index].c is one point on the triangle
-	UV coordinates dont exist yet
-	Use barycentric coordinates to get (a+b+c=1) variables
-	to compare points of triangle to point intersecting
-	Then use (a+b+c=1) to compare points of triangle's UVs
-		to get the UV coordinate of the point you hit
-	For Debugging, do pixColor = uv * 0.1
-		Then do vec3 pixColor = sample(texture, uv) * 0.1
-	However
-		This will not change the color of squares in reflection
-		triangles[eyeHitPoint.index].color needs to be replaced with 
-		reflectHit.point (like i.point) to calculate UVs all over again
-		
-Skybox
-	On lines 274, in Reflection FragmentShader.glsl
-	When you see if(intersectTriangles ...
-	Should have "else ..." to get skybox color
-	We already have direction, we just need color from cubemap
-	We do NOT change the if(intersectTriangles ... at line 241,
-	because that is for shadows
-	On line 346, change "return vec4(0,0,0,1)" to 
-	return the skybox color. This will be the actual background
-	wallpaper skybox
+Make a loop that reflects geometry, off of geometry, off of geometry...
+	To do this, rays need to bounce several times (next tutorial)
